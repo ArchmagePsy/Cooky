@@ -3,13 +3,15 @@ import json
 import os
 import pprint
 import re
+import sys
 from typing import BinaryIO
 
 from pony.orm import db_session, select
 from requests import request
 
 from payloads.generator import Generator
-from results import db, Request, Response
+from results import db
+from results.models import Request, Response
 
 printer = pprint.PrettyPrinter(indent=4)
 
@@ -85,8 +87,7 @@ def cli(args):
                     requestBody = open(value, "rb") if os.path.isfile(value) else value
                 else:
                     print(f"No request argument '{key}'")
-
-            if section in requestParams.keys():  # set one of the parameter sections
+            elif section in requestParams.keys():  # set one of the parameter sections
                 requestParams[section][key] = value
             else:
                 print(f"No section '{section}'")
@@ -99,6 +100,8 @@ def cli(args):
                    for res in Response for req in Request).show(width=100)
         elif single_command == "RUN":
             return False
+        elif single_command == "QUIT":
+            sys.exit(0)
     else:
         return False
 
