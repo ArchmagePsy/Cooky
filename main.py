@@ -1,5 +1,7 @@
 import requests, argparse
 
+from results import *
+
 
 def main(): # run the program
     pass
