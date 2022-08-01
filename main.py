@@ -4,12 +4,13 @@ import os
 import pprint
 import re
 import sys
-from typing import BinaryIO
+from io import BufferedReader
+from operator import attrgetter
 
 from pony.orm import db_session, select
 from requests import request
 
-from payloads.generator import Generator
+from payloads.generator import Generator, Registry
 from results import db
 from results.models import Request, Response
 
@@ -27,50 +28,60 @@ requestParams = {
     "params": {}
 }
 
+payloads = []
+
 attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z\-]+) (.+)")
+payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z\-]+) ([A-Z]\w+)")
 
 
 @db_session
 def execute():
-    if type(requestBody) is str: # get the body as bytes
+    payloads.sort(key=attrgetter("end"), reverse=True)
+
+    if type(requestBody) is str:  # get the body as bytes
         request_data = requestBody.encode("utf-8")
     else:
         request_data = requestBody.read()
-        requestBody.seek(0) # go back to start of file
+        requestBody.seek(0)  # go back to start of file
 
-    request_params = dict() # new params object for payloads
+    while not payloads[0].done():
 
-    for section in requestParams.keys(): # generate parames with payload generators
-        request_params[section] = {key: value.next() if isinstance(value, Generator) else value
-                                   for key, value in requestParams[section].items()}
+        request_params = dict()  # new params object for payloads
 
-    # add request to db
-    request_record = Request(method=requestMethod, route=requestRoute, headers=str(request_params["headers"]),
-                             cookies=str(request_params["cookies"]), params=str(request_params["params"]),
-                             data=request_data)
+        for section in requestParams.keys():  # generate params with payload generators
+            request_params[section] = {key: value.next() if isinstance(value, Generator) else value
+                                       for key, value in requestParams[section].items()}
 
-    db.commit()
+        # add request to db
+        request_record = Request(method=requestMethod, route=requestRoute, headers=str(request_params["headers"]),
+                                 cookies=str(request_params["cookies"]), params=str(request_params["params"]),
+                                 data=request_data)
 
-    # make request
-    response = request(requestMethod, requestRoute, data=requestBody, **request_params)
+        db.commit()
 
-    # add response to db
-    Response(request=request_record, route=response.url, headers=str(response.headers),
-             cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+        # make request
+        response = request(requestMethod, requestRoute, data=requestBody, **request_params)
 
-    db.commit()
+        # add response to db
+        Response(request=request_record, route=response.url, headers=str(response.headers),
+                 cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+
+        db.commit()
+
+        for g in filter(lambda p: p.done(), payloads[1:]):
+            g.reset()
 
     return True
 
 
 @db_session
 def cli(args):
-    global requestBody, requestRoute, requestMethod, requestParams
+    global requestBody, requestRoute, requestMethod, requestParams, payloads
 
     if args.shell:  # start interactive shell
         command = input("> ")
 
-        if command[:3].upper() == "SET":  # set attributes in sections or arguments
+        if (arg_command := command[:3].upper()) == "SET":  # set attributes in sections or arguments
             match = attributePattern.match(command[3:].strip())
 
             if not match:
@@ -89,6 +100,24 @@ def cli(args):
                     print(f"No request argument '{key}'")
             elif section in requestParams.keys():  # set one of the parameter sections
                 requestParams[section][key] = value
+            else:
+                print(f"No section '{section}'")
+        elif arg_command == "USE":
+            match = payloadPattern.match(command[3:].strip())
+
+            if not match:
+                return True
+
+            section, key, payload = match[1], match[2], match[3]
+
+            if section in requestParams.keys():  # set one of the parameter sections to given payload
+                generator = Registry.get(payload)
+
+                if not generator:
+                    print(f"No payload '{payload}'")
+
+                payloads.append(generator)
+                requestParams[section][key] = generator
             else:
                 print(f"No section '{section}'")
         elif (single_command := command.upper()) == "VIEW":  # print the request parameters
@@ -115,7 +144,8 @@ def main(args):  # run the program
     return execute()
 
 
-if __name__ == "__main__":
+def setup():
+    global requestMethod, requestRoute
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-r", help="set route for the request", type=str, dest="route")
@@ -137,8 +167,19 @@ if __name__ == "__main__":
 
     db.generate_mapping(create_tables=True)  # setup db
 
+    return arguments
+
+
+def cleanup():
+    if isinstance(requestBody, BufferedReader):  # close file object if created
+        requestBody.close()
+
+
+if __name__ == "__main__":
+
+    arguments = setup()
+
     while main(arguments):
         pass
 
-    if isinstance(requestBody, BinaryIO):  # close file object if created
-        requestBody.close()
+    cleanup()
