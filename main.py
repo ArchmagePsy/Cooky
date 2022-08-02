@@ -179,6 +179,8 @@ def cli(args):
             return False
         elif single_command == "QUIT":
             sys.exit(0)
+        else:
+            print("Unrecognised expression:", command)
     else:
         return False
 

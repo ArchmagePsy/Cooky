@@ -90,7 +90,3 @@ class Strings(Generator):
 
     def __repr__(self):
         return f"{type(self).__name__}(file: {self.file})"
-
-
-class Script(Generator):
-    pass
