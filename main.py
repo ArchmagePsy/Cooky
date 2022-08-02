@@ -31,6 +31,8 @@ requestParams = {
     "params": {}
 }
 
+requestAuth = None
+
 payloads = []
 
 attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z\-]+) (.+)")
@@ -62,7 +64,7 @@ def execute():
                 for key, value in requestParams[section].items():
 
                     if isinstance(value, Generator):
-                        request_params[section][key] = value.next()
+                        request_params[section][key] = value.next() if section != "cookies" else str(value.next())
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     else:
                         request_params[section][key] = value
@@ -75,7 +77,7 @@ def execute():
             db.commit()
 
             # make request
-            response = request(requestMethod, requestRoute, data=requestBody, **request_params)
+            response = request(requestMethod, requestRoute, data=requestBody, auth=requestAuth, **request_params)
 
             # add response to db
             Response(request=request_record, route=response.url, headers=str(response.headers),
@@ -109,7 +111,7 @@ def execute():
 
 @db_session
 def cli(args):
-    global requestBody, requestRoute, requestMethod, requestParams, payloads
+    global requestBody, requestRoute, requestMethod, requestParams, requestAuth, payloads
 
     if args.shell:  # start interactive shell
         command = input("> ")
@@ -168,6 +170,11 @@ def cli(args):
             print(f"{requestMethod}\t{requestRoute}")
             printer.pprint(requestParams)
             print(requestBody)
+        elif single_command == "AUTH":
+            username = input("Enter username: ")
+            password = input("Enter password: ")
+
+            requestAuth = (username, password)
         elif single_command == "RESULTS":  # print the results
             filter_regex = input("filter?> ")
 
