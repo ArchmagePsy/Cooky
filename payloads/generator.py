@@ -1,3 +1,6 @@
+import os
+
+
 class Registry:
     generators = {}
 
@@ -55,4 +58,39 @@ class Generator:
 
 
 class Numbers(Generator):
+    pass
+
+
+class Strings(Generator):
+
+    def __init__(self, name, strings, file, initial, end, step):
+        Generator.__init__(self, name, initial, end, step)
+        self.strings = strings
+        self.file = file
+
+    def generate(self):
+        return self.strings[self.count]
+
+    @classmethod
+    def setup(cls):
+        name = input("Choose a name for this payload: ")
+        file = input("Choose a file path for strings: ")
+
+        if not isinstance(name, str) or not os.path.isfile(file):
+            print("File not found or name not valid")
+            return None
+
+        strings = [string for string in open(file, "r").read().splitlines()]
+        initial = 0
+        end = len(strings) - 1
+        step = 1
+
+        Registry.register(name, cls(name=name, strings=strings, file=file, initial=initial, end=end, step=step))
+        return Registry.get(name)
+
+    def __repr__(self):
+        return f"{type(self).__name__}(file: {self.file})"
+
+
+class Script(Generator):
     pass
