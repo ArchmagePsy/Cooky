@@ -1,6 +1,12 @@
-from pony.orm import Optional, Required, LongStr
+from pony.orm import Optional, Required, LongStr, Set
 
 from results import db
+
+
+class Payload(db.Entity):
+    request = Optional("Request")
+    name = Required(str)
+    value = Required(LongStr)
 
 
 class Request(db.Entity):
@@ -10,6 +16,7 @@ class Request(db.Entity):
     headers = Required(LongStr)
     cookies = Required(LongStr)
     params = Required(LongStr)
+    payloads = Set("Payload")
     data = Required(bytes)
 
 

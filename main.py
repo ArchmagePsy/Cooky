@@ -9,10 +9,12 @@ from operator import attrgetter
 
 from pony.orm import db_session, select
 from requests import request
+from tabulate import tabulate
 
+from payloads import generator
 from payloads.generator import Generator, Registry
 from results import db
-from results.models import Request, Response
+from results.models import Request, Response, Payload
 
 printer = pprint.PrettyPrinter(indent=4)
 
@@ -44,32 +46,44 @@ def execute():
         request_data = requestBody.read()
         requestBody.seek(0)  # go back to start of file
 
-    while payloads and not payloads[0].done():
+    if payloads:
+        while not payloads[0].done():
 
-        request_params = dict()  # new params object for payloads
+            request_params = {
+                "headers": {},
+                "cookies": {},
+                "params": {}
+            }  # new params object for payloads
 
-        for section in requestParams.keys():  # generate params with payload generators
-            request_params[section] = {key: value.next() if isinstance(value, Generator) else value
-                                       for key, value in requestParams[section].items()}
+            payload_records = []
 
-        # add request to db
-        request_record = Request(method=requestMethod, route=requestRoute, headers=str(request_params["headers"]),
-                                 cookies=str(request_params["cookies"]), params=str(request_params["params"]),
-                                 data=request_data)
+            for section in requestParams.keys():  # generate params with payload generators
+                for key, value in requestParams[section].items():
 
-        db.commit()
+                    if isinstance(value, Generator):
+                        request_params[section][key] = value.next()
+                        payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
+                    else:
+                        request_params[section][key] = value
 
-        # make request
-        response = request(requestMethod, requestRoute, data=requestBody, **request_params)
+            # add request to db
+            request_record = Request(method=requestMethod, route=requestRoute, headers=str(request_params["headers"]),
+                                     cookies=str(request_params["cookies"]), params=str(request_params["params"]),
+                                     payloads=payload_records, data=request_data)
 
-        # add response to db
-        Response(request=request_record, route=response.url, headers=str(response.headers),
-                 cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+            db.commit()
 
-        db.commit()
+            # make request
+            response = request(requestMethod, requestRoute, data=requestBody, **request_params)
 
-        for g in filter(lambda p: p.done(), payloads[1:]):
-            g.reset()
+            # add response to db
+            Response(request=request_record, route=response.url, headers=str(response.headers),
+                     cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+
+            db.commit()
+
+            for g in filter(lambda p: p.done(), payloads[1:]):
+                g.reset()
     else:
         # add request to db
         request_record = Request(method=requestMethod, route=requestRoute, headers=str(requestParams["headers"]),
@@ -127,13 +141,15 @@ def cli(args):
             section, key, payload = match[1], match[2], match[3]
 
             if section in requestParams.keys():  # set one of the parameter sections to given payload
-                generator = Registry.get(payload)
+                payload_generator = getattr(generator, payload, None)
 
-                if not generator:
+                if not payload_generator or payload == "Registry":
                     print(f"No payload '{payload}'")
+                    return True
 
-                payloads.append(generator)
-                requestParams[section][key] = generator
+                if payload_config := payload_generator.setup():  # setup the payload and insert it if successful
+                    payloads.append(payload_config)
+                    requestParams[section][key] = payload_config
             else:
                 print(f"No section '{section}'")
         elif (single_command := command.upper()) == "VIEW":  # print the request parameters
@@ -141,9 +157,25 @@ def cli(args):
             printer.pprint(requestParams)
             print(requestBody)
         elif single_command == "RESULTS":  # print the results
-            select((res.id, res.route, res.status, req.method, req.route)
-                   for res in Response for req in Request).show(width=100)
+            query = select((res, req)
+                           for res in Response for req in Request
+                           if res.request == req)
+
+            data = []
+
+            for res, req in query:
+                row = [req.id, req.method, req.route, res.route, res.status]
+                row.extend(map(attrgetter("value"), sorted(req.payloads, key=attrgetter("name"))))
+                data.append(row)
+
+            headers = ["id", "method", "request", "response", "status"]
+            headers.extend(f"Payload {name}" for name in sorted(map(attrgetter("name"), query.first()[1].payloads)))
+
+            print(tabulate(data, headers=headers))
+
         elif single_command == "RUN":
+            for p in payloads:
+                p.reset()
             return False
         elif single_command == "QUIT":
             sys.exit(0)
