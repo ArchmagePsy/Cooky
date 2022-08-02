@@ -25,5 +25,6 @@ class Response(db.Entity):
     route = Required(str)
     headers = Required(LongStr)
     cookies = Required(LongStr)
+    encoding = Required(str)
     body = Required(bytes)
     status = Required(int)

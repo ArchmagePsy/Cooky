@@ -6,6 +6,7 @@ import re
 import sys
 from io import BufferedReader
 from operator import attrgetter
+from textwrap import wrap
 
 from pony.orm import db_session, select
 from requests import request
@@ -78,7 +79,8 @@ def execute():
 
             # add response to db
             Response(request=request_record, route=response.url, headers=str(response.headers),
-                     cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+                     cookies=str(dict(response.cookies)), status=response.status_code, body=response.content,
+                     encoding=response.encoding)
 
             db.commit()
 
@@ -97,7 +99,8 @@ def execute():
 
         # add response to db
         Response(request=request_record, route=response.url, headers=str(response.headers),
-                 cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+                 cookies=str(dict(response.cookies)), status=response.status_code, body=response.content,
+                 encoding=response.encoding)
 
         db.commit()
 
@@ -152,11 +155,22 @@ def cli(args):
                     requestParams[section][key] = payload_config
             else:
                 print(f"No section '{section}'")
+        elif arg_command == "GET":
+            res = Response[int(command[3:].strip())]
+            newline = "\n"
+
+            print(f"URL: {res.route}",
+                  f"status: {res.status}",
+                  f"headers: {newline.join(wrap(res.headers, width=100))}",
+                  f"cookies: {newline.join(wrap(res.cookies, width=100))}",
+                  res.body.decode(res.encoding), sep="\n")
         elif (single_command := command.upper()) == "VIEW":  # print the request parameters
             print(f"{requestMethod}\t{requestRoute}")
             printer.pprint(requestParams)
             print(requestBody)
         elif single_command == "RESULTS":  # print the results
+            filter_regex = input("filter?> ")
+
             query = select((res, req)
                            for res in Response for req in Request
                            if res.request == req)
@@ -164,11 +178,13 @@ def cli(args):
             data = []
 
             for res, req in query:
-                row = [req.id, req.method, req.route, res.route, res.status]
+                row = [req.id, req.method, req.route, res.route, f"{len(res.body)} bytes", res.status]
                 row.extend(map(attrgetter("value"), sorted(req.payloads, key=attrgetter("name"))))
-                data.append(row)
 
-            headers = ["id", "method", "request", "response", "status"]
+                if filter_regex.strip() == "" or re.search(filter_regex, res.body.decode(res.encoding)):
+                    data.append(row)
+
+            headers = ["id", "method", "request-url", "response-url", "response-size", "status"]
             headers.extend(f"Payload {name}" for name in sorted(map(attrgetter("name"), query.first()[1].payloads)))
 
             print(tabulate(data, headers=headers))
