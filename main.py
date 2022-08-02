@@ -44,7 +44,7 @@ def execute():
         request_data = requestBody.read()
         requestBody.seek(0)  # go back to start of file
 
-    while not payloads[0].done():
+    while payloads and not payloads[0].done():
 
         request_params = dict()  # new params object for payloads
 
@@ -70,6 +70,22 @@ def execute():
 
         for g in filter(lambda p: p.done(), payloads[1:]):
             g.reset()
+    else:
+        # add request to db
+        request_record = Request(method=requestMethod, route=requestRoute, headers=str(requestParams["headers"]),
+                                 cookies=str(requestParams["cookies"]), params=str(requestParams["params"]),
+                                 data=request_data)
+
+        db.commit()
+
+        # make request
+        response = request(requestMethod, requestRoute, data=requestBody, **requestParams)
+
+        # add response to db
+        Response(request=request_record, route=response.url, headers=str(response.headers),
+                 cookies=str(dict(response.cookies)), status=response.status_code, body=response.content)
+
+        db.commit()
 
     return True
 
