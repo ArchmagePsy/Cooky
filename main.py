@@ -74,10 +74,10 @@ def execute():
                 for key, value in requestParams[section].items():
 
                     if isinstance(value, Generator):
-                        request_params[section][key] = value.next() if section != "cookies" else str(value.next())
+                        request_params[section][key] = value.next() if section == "params" else str(value.next())
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     elif isinstance(value, Feedback):
-                        request_params[section][key] = value.next(response) if section != "cookies" else str(value.next(response))
+                        request_params[section][key] = value.next(response) if section == "params" else str(value.next(response))
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     else:
                         request_params[section][key] = value
@@ -160,7 +160,7 @@ def cli(args):
 
             if section in requestParams.keys():  # set one of the parameter sections to given payload
                 payload_klass = getattr(generator, payload, None)
-                payload_klass = getattr(feedback, payload, None) if not payload_klass else None
+                if not payload_klass: payload_klass = getattr(feedback, payload, None)
 
                 if not payload_klass or payload == "Registry":
                     print(f"No payload '{payload}'")
