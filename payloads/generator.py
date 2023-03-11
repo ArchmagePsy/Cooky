@@ -1,25 +1,11 @@
 import os
+from payloads.payload import Payload, Registry
 
 
-class Registry:
-    generators = {}
-
-    @classmethod
-    def register(cls, name, generator):
-        if isinstance(generator, Generator):
-            cls.generators[name] = generator
-        else:
-            raise TypeError(f"{type(generator)} is not compatible")
-
-    @classmethod
-    def get(cls, name):
-        return cls.generators[name]
-
-
-class Generator:
+class Generator(Payload):
 
     def __init__(self, name, initial, end, step):
-        self.name = name
+        Payload.__init__(self, name)
         self.initial = initial
         self.count = initial
         self.step = step

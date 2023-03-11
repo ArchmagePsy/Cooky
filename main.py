@@ -1,9 +1,15 @@
-import argparse
-import json
-import os
-import pprint
-import re
-import sys
+"""
+CHANGES MADE: added support for more general payload types, organised imports, added feedback type
+
+TODO: testing, write unittests for EVERY payload type and make sure that changes to payload system are compatible
+    potentially look into setting up a test service, look into turning this into a command (like cooky -i instead of python main.py -i),
+    also once more payload options and documentation has been written create a python package
+
+DON'T FORGET TO COMMIT CHANGES ONCE TESTED
+"""
+
+
+import argparse, json, os, pprint, re, sys
 from io import BufferedReader
 from operator import attrgetter
 from textwrap import wrap
@@ -12,8 +18,9 @@ from pony.orm import db_session, select
 from requests import request
 from tabulate import tabulate
 
-from payloads import generator
-from payloads.generator import Generator, Registry
+from payloads import generator, feedback
+from payloads.feedback import Feedback
+from payloads.generator import Generator
 from results import db
 from results.models import Request, Response, Payload
 
@@ -50,6 +57,9 @@ def execute():
         requestBody.seek(0)  # go back to start of file
 
     if payloads:
+
+        response = None
+
         while not payloads[0].done():
 
             request_params = {
@@ -65,6 +75,9 @@ def execute():
 
                     if isinstance(value, Generator):
                         request_params[section][key] = value.next() if section != "cookies" else str(value.next())
+                        payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
+                    elif isinstance(value, Feedback):
+                        request_params[section][key] = value.next(response) if section != "cookies" else str(value.next(response))
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     else:
                         request_params[section][key] = value
@@ -146,13 +159,14 @@ def cli(args):
             section, key, payload = match[1], match[2], match[3]
 
             if section in requestParams.keys():  # set one of the parameter sections to given payload
-                payload_generator = getattr(generator, payload, None)
+                payload_klass = getattr(generator, payload, None)
+                payload_klass = getattr(feedback, payload, None) if not payload_klass else None
 
-                if not payload_generator or payload == "Registry":
+                if not payload_klass or payload == "Registry":
                     print(f"No payload '{payload}'")
                     return True
 
-                if payload_config := payload_generator.setup():  # setup the payload and insert it if successful
+                if payload_config := payload_klass.setup():  # setup the payload and insert it if successful
                     payloads.append(payload_config)
                     requestParams[section][key] = payload_config
             else:
