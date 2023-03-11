@@ -42,8 +42,8 @@ requestAuth = None
 
 payloads = []
 
-attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z\-]+) (.+)")
-payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z\-]+) ([A-Z]\w+)")
+attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) (.+)")
+payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) ([A-Z]\w+)")
 
 
 @db_session
@@ -165,7 +165,6 @@ def cli(args):
                 if not payload_klass or payload == "Registry":
                     print(f"No payload '{payload}'")
                     return True
-
                 if payload_config := payload_klass.setup():  # setup the payload and insert it if successful
                     payloads.append(payload_config)
                     requestParams[section][key] = payload_config
