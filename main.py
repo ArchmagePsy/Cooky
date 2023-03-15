@@ -5,6 +5,9 @@ TODO: testing, write unittests for EVERY payload type and make sure that changes
     potentially look into setting up a test service, look into turning this into a command (like cooky -i instead of python main.py -i),
     also once more payload options and documentation has been written create a python package
 
+DONE: tests for Generators and Numbers
+TODO: test Strings and Feedback (RegExp)
+
 DON'T FORGET TO COMMIT CHANGES ONCE TESTED
 """
 

@@ -1,4 +1,4 @@
-import unittest, argparse
+import unittest, argparse, os
 import unittest.mock
 
 import httpretty
@@ -81,6 +81,31 @@ class NumbersTests(unittest.TestCase):
 
         assert httpretty.last_request().headers["number"] == "10"
 
+
+class StringsTests(unittest.TestCase):
+    def tearDown(self):
+        for file in os.listdir("files"):
+            os.remove(f"files/{file}")
+        os.removedirs("files")
+
+    def setUp(self):
+        if "files" in os.listdir():
+            for file in os.listdir("files"):
+                os.remove(f"files/{file}")
+            os.removedirs("files")
+        os.mkdir("files")
+
+    def test_setup(self):
+        temp = open("files/temp.strings", "w")
+
+        def mock_input(_, generator=input_generator("test", "files/temp.strings")):
+            return generator.__next__()
+
+        temp.writelines(["foo", "bar", "baz"])
+        temp.close()
+
+        with unittest.mock.patch("builtins.input", mock_input):
+            self.assertIsNotNone(Strings.setup())
 
 if __name__ == '__main__':
     unittest.main()
