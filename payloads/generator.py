@@ -66,7 +66,7 @@ class Strings(Generator):
             print("File not found or name not valid")
             return None
 
-        string_file = open(file, "r")
+        string_file = open(file, "r", newline="\n")
         strings = [string for string in string_file.read().splitlines()]
         string_file.close()
         initial = 0

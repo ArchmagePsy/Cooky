@@ -13,8 +13,15 @@ def input_generator(*inputs):
 def mock_setup(route):
     main.requestMethod = "GET"
     main.requestRoute = route
+    main.payloads = []
+    main.requestParams = {
+        "headers": {},
+        "cookies": {},
+        "params": {}
+    }
 
-    main.db.generate_mapping(create_tables=True)
+    if not main.db.schema:
+        main.db.generate_mapping(create_tables=True)
 
 
 class GeneratorTests(unittest.TestCase):
@@ -43,8 +50,6 @@ class GeneratorTests(unittest.TestCase):
             main.cli(arguments)
             main.cli(arguments)
             main.execute()
-
-        print(httpretty.last_request().headers["number1"])
 
         assert httpretty.last_request().headers["number1"] == "4"
         assert httpretty.last_request().headers["number2"] == "19"
@@ -101,11 +106,37 @@ class StringsTests(unittest.TestCase):
         def mock_input(_, generator=input_generator("test", "files/temp.strings")):
             return generator.__next__()
 
-        temp.writelines(["foo", "bar", "baz"])
+        temp.writelines(["foo\n", "bar\n", "baz\n"])
         temp.close()
 
         with unittest.mock.patch("builtins.input", mock_input):
             self.assertIsNotNone(Strings.setup())
+
+    @httpretty.activate
+    def test_execute(self):
+        temp = open("files/temp.strings", "w")
+
+        def request_callback(request, uri, response_headers):
+            assert request.headers["string"] in ["foo", "bar", "baz"]
+
+            return [200, response_headers, "testing strings . . ."]
+
+        httpretty.register_uri("GET", "https://cooky.test.com/strings", body=request_callback)
+
+        def mock_input(_, generator=input_generator("use headers string Strings", "test_strings", "files/temp.strings")):
+            return generator.__next__()
+
+        temp.writelines(["foo\n", "bar\n", "baz\n"])
+        temp.close()
+
+        mock_setup("https://cooky.test.com/strings")
+        arguments = argparse.ArgumentParser()
+        arguments.shell = True
+
+        with unittest.mock.patch("builtins.input", mock_input):
+            main.cli(arguments)
+            main.execute()
+
 
 if __name__ == '__main__':
     unittest.main()
