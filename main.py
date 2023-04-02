@@ -11,7 +11,6 @@ TODO: test Strings and Feedback (RegExp)
 DON'T FORGET TO COMMIT CHANGES ONCE TESTED
 """
 
-
 import argparse, json, os, pprint, re, sys
 from io import BufferedReader
 from operator import attrgetter
@@ -50,7 +49,7 @@ payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) ([A-Z]\w+)")
 
 
 @db_session
-def execute():
+def execute(tryout=None):
     payloads.sort(key=attrgetter("end"), reverse=True)
 
     if type(requestBody) is str:  # get the body as bytes
@@ -62,8 +61,9 @@ def execute():
     if payloads:
 
         response = None
+        tries = 0
 
-        while not payloads[0].done():
+        while (not payloads[0].done() and tryout is None) or (tryout is not None and tries < tryout):
 
             request_params = {
                 "headers": {},
@@ -80,7 +80,8 @@ def execute():
                         request_params[section][key] = value.next() if section == "params" else str(value.next())
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     elif isinstance(value, Feedback):
-                        request_params[section][key] = value.next(response) if section == "params" else str(value.next(response))
+                        request_params[section][key] = value.next(response) if section == "params" else str(
+                            value.next(response))
                         payload_records.append(Payload(value=str(request_params[section][key]), name=value.name))
                     else:
                         request_params[section][key] = value
@@ -101,6 +102,8 @@ def execute():
                      encoding=response.encoding)
 
             db.commit()
+
+            tries += 1
 
             for g in filter(lambda p: p.done(), payloads[1:]):
                 g.reset()
