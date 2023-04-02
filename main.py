@@ -233,7 +233,7 @@ def main(args):  # run the program
     while cli(args):
         pass
 
-    return execute()
+    return execute(args.tryout)
 
 
 def setup():
@@ -244,6 +244,9 @@ def setup():
     parser.add_argument("-m", help="set method to use for the request",
                         choices=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
                         default="GET", dest="method")
+    parser.add_argument("-t", help="number of iterations to execute the "
+                        "payloads for, useful when payloads otherwise run "
+                        "indefinitely", default=None, type=int, dest="tryout")
     parser.add_argument("-i", help="open up interactive shell", action="store_true", dest="shell")
     parser.add_argument("-j", help="import parameters from a JSON file", dest="json_file")
 
