@@ -5,6 +5,14 @@ from payloads.payload import Payload, Registry
 class Generator(Payload):
 
     def __init__(self, name, initial, end, step):
+        """
+        Base class for a generator payload, this type of payload iterates through a set of values be it numbers of strings.
+        (The Generator base class implements all the features necessary for the Numbers payload)
+        :param name: name of the payload
+        :param initial: the initial value
+        :param end: the final value
+        :param step: the step that the values should increment in (if decreasing payload is desired use negative step)
+        """
         Payload.__init__(self, name)
         self.initial = initial
         self.count = initial
@@ -12,21 +20,40 @@ class Generator(Payload):
         self.end = end
 
     def next(self):
+        """
+        Returns the next value for the payload by generating it and then incrementing the count by the defined step
+        :return: the next payload value
+        """
         payload = self.generate()
         self.count += self.step
         return payload
 
     def reset(self):
+        """
+        Rewinds the count for the generator back to the initial value so it can be restarted or looped
+        """
         self.count = self.initial
 
     def done(self):
+        """
+        Determines if the generator has any more values to generate (if the count is greater than the end)
+        :return: True if there are no more values and False if there are
+        """
         return self.count > self.end
 
     def generate(self):
+        """
+        Generates the current value for the payload
+        :return: the count
+        """
         return self.count
 
     @classmethod
     def setup(cls):
+        """
+        Classmethod facilitating interactive setup of the Numbers payload, see Generator constructor for input values
+        :return: if all inputs are valid it returns a Generator or Numbers payload, otherwise None
+        """
         name = input("Choose a name for this payload: ")
         initial = int(input("Choose a start value: "))
         end = int(input("Choose an end value: "))
@@ -50,6 +77,15 @@ class Numbers(Generator):
 class Strings(Generator):
 
     def __init__(self, name, strings, file, initial, end, step):
+        """
+        This payload inherits Generator and generates string values from a 
+        :param name:
+        :param strings:
+        :param file:
+        :param initial:
+        :param end:
+        :param step:
+        """
         Generator.__init__(self, name, initial, end, step)
         self.strings = strings
         self.file = file

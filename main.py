@@ -50,6 +50,13 @@ payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) ([A-Z]\w+)")
 
 @db_session
 def execute(tryout=None):
+    """
+    This function executes the payloads and makes the requests, if no payloads have been registered then a single request
+    with the specified parameters will be made
+    :param tryout: an optional argument set to None by default, controls the number of requests that will be retried if
+                the payload would otherwise run indefinitely (in the case of a feedback payload for example)
+    :return: always returns True
+    """
     payloads.sort(key=attrgetter("end"), reverse=True)
 
     if type(requestBody) is str:  # get the body as bytes
@@ -130,6 +137,13 @@ def execute(tryout=None):
 
 @db_session
 def cli(args):
+    """
+    runs the interactive command shell that allows the user to customize parts of the request and setup payloads used in
+    different sections. Once a user is done they can run the payload and comb through its results with the commandline
+    search functionality
+    :param args: argumentParser object necessary to determine of shell should be run
+    :return: returns False if requests should be executed and True otherwise
+    """
     global requestBody, requestRoute, requestMethod, requestParams, requestAuth, payloads
 
     if args.shell:  # start interactive shell
@@ -237,6 +251,11 @@ def main(args):  # run the program
 
 
 def setup():
+    """
+    Sets up the argumentParser and reads setting in from json file to setup the intial state of the request, also sets up
+    the database
+    :return: returns the argumentParser object for use in main
+    """
     global requestMethod, requestRoute
     parser = argparse.ArgumentParser()
 
@@ -266,6 +285,9 @@ def setup():
 
 
 def cleanup():
+    """
+    cleanup for the program, closes file stream if opened for request body
+    """
     if isinstance(requestBody, BufferedReader):  # close file object if created
         requestBody.close()
 
