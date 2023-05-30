@@ -1,6 +1,6 @@
 import math
 import re
-from payloads.payload import Payload, Registry
+from cooky.payloads.payload import Payload, Registry
 
 
 class Feedback(Payload):  # a payload that parses information from response body and uses it to compute the new request

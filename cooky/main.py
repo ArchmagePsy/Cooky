@@ -1,17 +1,10 @@
-"""
-CHANGES MADE: added support for more general payload types, organised imports, added feedback type
-
-TODO: testing, write unittests for EVERY payload type and make sure that changes to payload system are compatible
-    potentially look into setting up a test service, look into turning this into a command (like cooky -i instead of python main.py -i),
-    also once more payload options and documentation has been written create a python package
-
-DONE: tests for Generators and Numbers
-TODO: test Strings and Feedback (RegExp)
-
-DON'T FORGET TO COMMIT CHANGES ONCE TESTED
-"""
-
-import argparse, json, os, pprint, re, sys
+import argparse
+import importlib
+import json
+import os
+import pprint
+import re
+import sys
 from io import BufferedReader
 from operator import attrgetter
 from textwrap import wrap
@@ -20,11 +13,11 @@ from pony.orm import db_session, select
 from requests import request
 from tabulate import tabulate
 
-from payloads import generator, feedback
-from payloads.feedback import Feedback
-from payloads.generator import Generator
-from results import db
-from results.models import Request, Response, Payload
+from cooky.payloads import generator, feedback
+from cooky.payloads.generator import Generator
+from cooky.payloads.feedback import Feedback
+from cooky.results import db
+from cooky.results.models import Request, Response, Payload
 
 printer = pprint.PrettyPrinter(indent=4)
 
@@ -42,10 +35,13 @@ requestParams = {
 
 requestAuth = None
 
-payloads = []
+payloads_list = []
+payload_modules = [generator, feedback]
 
-attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) (.+)")
-payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]+) ([A-Z]\w+)")
+attributePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]*) (.+)")
+deletePattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]*)")
+payloadPattern = re.compile(r"([a-zA-Z]+) ([a-zA-Z][a-zA-Z0-9\-]*) ([A-Z]\w+)")
+packagePattern = re.compile(r"([a-zA-Z.]+) from ([a-zA-Z.]+)")
 
 
 @db_session
@@ -57,7 +53,8 @@ def execute(tryout=None):
                 the payload would otherwise run indefinitely (in the case of a feedback payload for example)
     :return: always returns True
     """
-    payloads.sort(key=attrgetter("end"), reverse=True)
+    global requestMethod, requestRoute, requestAuth, requestBody, requestParams, packagePattern, payloadPattern, attributePattern, payloads_list, payload_modules
+    payloads_list.sort(key=attrgetter("end"), reverse=True)
 
     if type(requestBody) is str:  # get the body as bytes
         request_data = requestBody.encode("utf-8")
@@ -65,12 +62,12 @@ def execute(tryout=None):
         request_data = requestBody.read()
         requestBody.seek(0)  # go back to start of file
 
-    if payloads:
+    if payloads_list:
 
         response = None
         tries = 0
 
-        while (not payloads[0].done() and tryout is None) or (tryout is not None and tries < tryout):
+        while (not payloads_list[0].done() and tryout is None) or (tryout is not None and tries < tryout):
 
             request_params = {
                 "headers": {},
@@ -112,7 +109,7 @@ def execute(tryout=None):
 
             tries += 1
 
-            for g in filter(lambda p: p.done(), payloads[1:]):
+            for g in filter(lambda p: p.done(), payloads_list[1:]):
                 g.reset()
     else:
         # add request to db
@@ -144,8 +141,7 @@ def cli(args):
     :param args: argumentParser object necessary to determine of shell should be run
     :return: returns False if requests should be executed and True otherwise
     """
-    global requestBody, requestRoute, requestMethod, requestParams, requestAuth, payloads
-
+    global requestMethod, requestRoute, requestAuth, requestBody, requestParams, packagePattern, payloadPattern, attributePattern, payloads_list, payload_modules
     if args.shell:  # start interactive shell
         command = input("> ")
 
@@ -179,17 +175,48 @@ def cli(args):
             section, key, payload = match[1], match[2], match[3]
 
             if section in requestParams.keys():  # set one of the parameter sections to given payload
-                payload_klass = getattr(generator, payload, None)
-                if not payload_klass: payload_klass = getattr(feedback, payload, None)
+                payload_klass = None
+
+                for module in payload_modules:
+                    payload_klass = getattr(module, payload, None)
+
+                    if payload_klass:
+                        break
 
                 if not payload_klass or payload == "Registry":
                     print(f"No payload '{payload}'")
                     return True
                 if payload_config := payload_klass.setup():  # setup the payload and insert it if successful
-                    payloads.append(payload_config)
+                    payloads_list.append(payload_config)
                     requestParams[section][key] = payload_config
             else:
                 print(f"No section '{section}'")
+        elif arg_command == "DEL":
+            match = deletePattern.match(command[3:].strip())
+
+            if not match:
+                return True
+
+            section, key = match[1], match[2]
+
+            if section.upper() == "REQUEST":  # deleting a request argument
+                if (argument := key.upper()) == "BODY": # delete the body
+                    requestBody = ""
+                else:
+                    print(f"No request argument or could not remove '{key}'")
+            elif section in requestParams.keys():  # delete one of the parameter sections
+                if key in requestParams[section].keys(): del requestParams[section][key]
+                else: print(f"No field '{key}' in  '{section}'")
+            else:
+                print(f"No section '{section}'")
+        elif arg_command == "MOD":
+            match = packagePattern.match(command[3:].strip())
+            try:
+                module = importlib.import_module(match[1], match[2])
+                payload_modules.append(module)
+            except ModuleNotFoundError:
+                print(f"No such module '{match[1]}'")
+
         elif arg_command == "GET":
             res = Response[int(command[3:].strip())]
             newline = "\n"
@@ -230,7 +257,7 @@ def cli(args):
             print(tabulate(data, headers=headers))
 
         elif single_command == "RUN":
-            for p in payloads:
+            for p in payloads_list:
                 p.reset()
             return False
         elif single_command == "QUIT":
@@ -252,11 +279,11 @@ def main(args):  # run the program
 
 def setup():
     """
-    Sets up the argumentParser and reads setting in from json file to setup the intial state of the request, also sets up
+    Sets up the argumentParser and reads setting in from json file to setup the initial state of the request, also sets up
     the database
     :return: returns the argumentParser object for use in main
     """
-    global requestMethod, requestRoute
+    global requestMethod, requestRoute, requestParams
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-r", help="set route for the request", type=str, dest="route")
@@ -264,12 +291,17 @@ def setup():
                         choices=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
                         default="GET", dest="method")
     parser.add_argument("-t", help="number of iterations to execute the "
-                        "payloads for, useful when payloads otherwise run "
-                        "indefinitely", default=None, type=int, dest="tryout")
+                                   "payloads for, useful when payloads otherwise run "
+                                   "indefinitely", default=None, type=int, dest="tryout")
     parser.add_argument("-i", help="open up interactive shell", action="store_true", dest="shell")
     parser.add_argument("-j", help="import parameters from a JSON file", dest="json_file")
 
     arguments = parser.parse_args()
+
+    if not arguments.shell and (not all([arguments.route, arguments.method]) and not arguments.json_file):
+        parser.print_help()
+        print("route and method required in non-interactive mode")
+        sys.exit(0)
 
     # set method and route from args
     requestMethod = arguments.method
@@ -288,15 +320,19 @@ def cleanup():
     """
     cleanup for the program, closes file stream if opened for request body
     """
+    global requestBody
     if isinstance(requestBody, BufferedReader):  # close file object if created
         requestBody.close()
 
 
-if __name__ == "__main__":
-
+def exe():
     arguments = setup()
 
     while main(arguments):
         pass
 
     cleanup()
+
+
+if __name__ == "__main__":
+    exe()

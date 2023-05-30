@@ -1,6 +1,6 @@
 from pony.orm import Optional, Required, LongStr, Set
 
-from results import db
+from cooky.results import db
 
 
 class Payload(db.Entity):

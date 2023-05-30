@@ -4,9 +4,9 @@ import unittest.mock
 
 import httpretty
 
-import main
-from payloads.feedback import RegExp
-from tests import input_generator, mock_setup
+from cooky import main
+from cooky.payloads.feedback import RegExp
+from cooky.tests import input_generator, mock_setup
 
 
 class RegExpTests(unittest.TestCase):

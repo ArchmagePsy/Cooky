@@ -1,4 +1,5 @@
-import main
+from cooky import main
+
 
 def input_generator(*inputs):
     for s in inputs: yield s
@@ -7,7 +8,7 @@ def input_generator(*inputs):
 def mock_setup(route):
     main.requestMethod = "GET"
     main.requestRoute = route
-    main.payloads = []
+    main.payloads_list = []
     main.requestParams = {
         "headers": {},
         "cookies": {},

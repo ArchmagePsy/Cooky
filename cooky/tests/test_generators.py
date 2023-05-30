@@ -2,9 +2,9 @@ import unittest, argparse, os
 import unittest.mock
 
 import httpretty
-from payloads.generator import Numbers, Strings
-import main
-from tests import input_generator, mock_setup
+from cooky.payloads.generator import Numbers, Strings
+from cooky import main
+from cooky.tests import input_generator, mock_setup
 
 
 class GeneratorTests(unittest.TestCase):
@@ -66,6 +66,8 @@ class NumbersTests(unittest.TestCase):
         with unittest.mock.patch("builtins.input", mock_input):
             main.cli(arguments)
             main.execute()
+
+        main.printer.pprint(main.requestParams)
 
         assert httpretty.last_request().headers["number"] == "10"
 

@@ -1,1 +1,4 @@
 venv
+/pyproject.toml
+/Cooky.egg-info/
+/dist/

@@ -1,5 +1,5 @@
 import os
-from payloads.payload import Payload, Registry
+from cooky.payloads.payload import Payload, Registry
 
 
 class Generator(Payload):
